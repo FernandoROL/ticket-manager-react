@@ -12,6 +12,7 @@ import { format } from 'date-fns'
 
 import './dash.css'
 import { db } from '../../services/firebase'
+import Modal from '../../components/Modal'
 
 const listRef = collection(db, "tickets")
 
@@ -24,6 +25,9 @@ export default function Dashboard() {
     const [isEmpty, setIsEmpty] = useState(false)
     const [lastDocs, setLastDocs] = useState()
     const [loadingMore, setLoadingMore] = useState(false)
+
+    const [showPostModal, setShowPostModal] = useState(false)
+    const [detail, setDetail] = useState({})
 
     useEffect(() => {
         async function loadTickets() {
@@ -84,6 +88,11 @@ export default function Dashboard() {
 
         const querySnapshot = await getDocs(q)
         await updateState(querySnapshot)
+    }
+
+    function toggleModal(item) {
+        setShowPostModal(!showPostModal)
+        setDetail(item)
     }
 
 
@@ -153,7 +162,7 @@ export default function Dashboard() {
                                                 </td>
                                                 <td data-label="Registered">{item.createdFormat}</td>
                                                 <td data-label="#">
-                                                    <Link className="action" style={{ backgroundColor: '#3583f6' }}>
+                                                    <Link className="action" style={{ backgroundColor: '#3583f6' }} onClick={() => toggleModal(item)}>
                                                         <FiSearch color='#FFF' size={17} />
                                                     </Link>
                                                     <Link to={`/edit/${item.id}`} className="action" style={{ backgroundColor: '#f6a935' }}>
@@ -173,6 +182,13 @@ export default function Dashboard() {
                 </>
 
             </div>
+
+            {showPostModal && (
+                <Modal
+                    content={detail}
+                    close={ () => setShowPostModal(!showPostModal)}
+                />
+            )}
 
         </div>
     )
