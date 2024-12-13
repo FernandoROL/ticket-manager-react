@@ -1,12 +1,26 @@
 import './signin.css';
 import logo from '../../assets/logo.svg';
-import { useState } from 'react';
+import { useState, useContext } from 'react';
 import { Link } from 'react-router-dom';
+
+import { AuthContext } from '../../contexts/auth';
 
 export default function SignIn() {
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+
+    const { signIn, loadingAuth } = useContext(AuthContext);
+
+    function handleSubmit(event) {
+        event.preventDefault();
+
+        if(email !== '' && password !== ''){
+            signIn(email, password);
+        } else {
+            alert("Please fill in all fields!");
+        }
+    }
 
     return (
         <div>
@@ -16,7 +30,7 @@ export default function SignIn() {
                         <img src={logo} alt="System logo" />
                     </div>
 
-                    <form >
+                    <form onSubmit={handleSubmit}>
                         <h1>Login</h1>
                         <input
                             type="text"
@@ -32,7 +46,9 @@ export default function SignIn() {
                             onChange={(e) => setPassword(e.target.value)}
                         />
 
-                        <button type="submit">Login</button>
+                        <button type="submit">
+                            {loadingAuth ? "Loading..." : `Login`}
+                        </button>
                     </form>
 
                     <div className="links-bottom">
