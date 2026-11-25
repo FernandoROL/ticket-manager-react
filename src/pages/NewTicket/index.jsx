@@ -4,10 +4,10 @@ import Title from '../../components/Title'
 import './style.css'
 import { useContext, useEffect, useState } from 'react'
 import { AuthContext } from '../../contexts/auth'
-import { addDoc, collection, doc, getDoc, getDocs, updateDoc } from 'firebase/firestore'
+import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore'
 import { db } from '../../services/firebase'
 import { toast } from "react-toastify";
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 const listRef = collection(db, 'customers')
 
@@ -19,120 +19,72 @@ export default function NewTicket() {
 
     const [customers, setCustomers] = useState([])
     const [loadCustomer, setLoadCustomer] = useState(true)
-    const [customerSelected, setCustomerSelected] = useState(0)
+    const [customerSelected, setCustomerSelected] = useState('')
 
     const [description, setDescription] = useState('')
     const [subject, setSubject] = useState('Support')
     const [status, setStatus] = useState('Open')
 
-    const [idCustomer, setIdCustomer] = useState(false)
+    const [loadError, setLoadError] = useState('')
+    const [saving, setSaving] = useState(false)
 
     useEffect(() => {
-        async function loadCustomers() {
-            const querySnapshot = await getDocs(listRef)
-                .then((snapshot) => {
-                    let list = []
+        let active = true
+        async function loadForm() {
+            setLoadCustomer(true)
+            setLoadError('')
+            try {
+                const [snapshot, ticket] = await Promise.all([
+                    getDocs(query(listRef, where('userId', '==', user.uid))),
+                    id ? getDoc(doc(db, 'tickets', id)) : null
+                ])
+                if (!active) return
+                if (id && (!ticket.exists() || ticket.data().userId !== user.uid)) {
+                    setLoadError('Ticket not found.')
+                    return
+                }
 
-                    snapshot.forEach((doc) => {
-                        list.push({
-                            id: doc.id,
-                            companyName: doc.data().companyName
-                        })
-                    })
-
-                    if (snapshot.docs.size === 0) {
-                        console.log("No companies were found...")
-                        setCustomers([{
-                            id: 1
-                            , companyName: 'Company'
-                        }])
-                        setLoadCustomer(false)
-                        return;
-                    }
-
-                    setCustomers(list)
-                    setLoadCustomer(false)
-
-                    if (id) {
-                        loadId(list)
-                    }
-                })
-                .catch((error) => {
-                    console.log("error serching clients: " + error)
-                    setLoadCustomer(false)
-                    setCustomers([{
-                        id: 1
-                        , companyName: 'Company'
-                    }])
-                })
+                const list = snapshot.docs.map(customer => ({
+                    id: customer.id,
+                    companyName: customer.data().companyName
+                }))
+                const data = ticket?.data()
+                setCustomers(list)
+                setCustomerSelected(data ? data.clientId : list[0]?.id ?? '')
+                setSubject(data?.subject ?? 'Support')
+                setStatus(data?.status ?? 'Open')
+                setDescription(data?.description ?? '')
+            } catch (error) {
+                if (active) setLoadError('Could not open this form (' + error.code + ').')
+            } finally {
+                if (active) setLoadCustomer(false)
+            }
         }
+        loadForm()
+        return () => { active = false }
+    }, [id, user.uid])
 
-        loadCustomers();
-    }, [])
-
-    async function loadId(list) {
-        const docRef = doc(db, "tickets", id)
-        await getDoc(docRef)
-            .then((snapshot) => {
-                setSubject(snapshot.data().subject)
-                setStatus(snapshot.data().status)
-                setDescription(snapshot.data().description)
-
-                let index = list.findIndex(item => item.id === snapshot.data().clientId)
-                setCustomerSelected(index)
-                setIdCustomer(true)
-            })
-            .catch((error) => {
-                console.log(error)
-                setIdCustomer(false)
-            })
-    }
+    const customer = customers.find(item => item.id === customerSelected)
 
     async function handleRegister(e) {
         e.preventDefault()
+        if (loadCustomer || loadError || !customer || saving) return
 
-        if (idCustomer) {
-
-            const docRef = doc(db, 'tickets', id)
-            await updateDoc(docRef, {
-                client: customers[customerSelected].companyName,
-                clientId: customers[customerSelected].id,
-                subject: subject,
-                description: description,
-                status: status,
-                userId: user.uid
-            })
-            .then(() => {
-                toast.info("Ticket updated successfully")
-                navigate('/dashboard')
-            })
-            .catch((error) => {
-                toast.error("Error updating ticket")
-                console.log(error)
-            })
-
-            return;
+        setSaving(true)
+        const fields = { client: customer.companyName, clientId: customer.id, subject, description, status }
+        try {
+            if (id) {
+                await updateDoc(doc(db, 'tickets', id), fields)
+            } else {
+                await addDoc(collection(db, 'tickets'), { ...fields, userId: user.uid, created_at: serverTimestamp() })
+            }
+            toast.success(id ? 'Ticket updated successfully' : 'Ticket registered successfully')
+            navigate('/dashboard')
+        } catch (error) {
+            toast.error('Could not save the ticket (' + error.code + ').')
+        } finally {
+            setSaving(false)
         }
-
-        await addDoc(collection(db, 'tickets'), {
-            created_at: new Date(),
-            client: customers[customerSelected].companyName,
-            clientId: customers[customerSelected].id,
-            subject: subject,
-            description: description,
-            status: status,
-            userId: user.uid
-        })
-            .then(() => {
-                toast.success("Ticket registered successfully")
-                setDescription('')
-                setCustomerSelected(0)
-                navigate('/dashboard')
-            })
-            .catch((error) => {
-                toast.error("Error registering ticket")
-                console.log(error)
-            })
     }
 
     function handleOptionChange(e) {
@@ -158,15 +110,20 @@ export default function NewTicket() {
 
                 <div className="container">
                     <form className="form-profile" onSubmit={handleRegister}>
+                        {loadError && <p role="alert">{loadError}</p>}
+                        {!loadCustomer && !loadError && !customers.length && (
+                            <p><Link to="/customers">Register a customer</Link> to use this form.</p>
+                        )}
                         <label>Customer</label>
                         {
                             loadCustomer ? (
                                 <input type="text" disabled={true} value="Carregando..." />
                             ) : (
-                                <select value={customerSelected} onChange={handleChangeCustomer}>
-                                    {customers.map((item, index) => {
+                                <select disabled={!!loadError || !customers.length} value={customer ? customerSelected : ''} onChange={handleChangeCustomer}>
+                                    {!customer && <option value="">Select one of your customers</option>}
+                                    {customers.map(item => {
                                         return (
-                                            <option key={index} value={index}>
+                                            <option key={item.id} value={item.id}>
                                                 {item.companyName}
                                             </option>
                                         )
@@ -214,7 +171,7 @@ export default function NewTicket() {
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                         />
-                        <button type="submit">Submit</button>
+                        <button type="submit" disabled={loadCustomer || !!loadError || !customer || saving}>Submit</button>
                     </form>
                 </div>
 

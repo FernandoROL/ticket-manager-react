@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function owns(data) {
+      return request.auth != null && data.userId == request.auth.uid;
+    }
+
+    match /users/{uid} {
+      allow get, create, update: if request.auth != null && request.auth.uid == uid;
+    }
+
+    match /customers/{id} {
+      allow read: if owns(resource.data);
+      allow create: if owns(request.resource.data);
+    }
+
+    match /tickets/{id} {
+      function ownsCustomer() {
+        let clientId = request.resource.data.clientId;
+        return clientId is string && clientId.matches('^[^/]+$') &&
+          owns(get(/databases/$(database)/documents/customers/$(clientId)).data);
+      }
+      allow read: if owns(resource.data);
+      allow create: if owns(request.resource.data) && ownsCustomer();
+      allow update: if owns(resource.data) && owns(request.resource.data) &&
+        request.resource.data.created_at == resource.data.created_at && ownsCustomer();
+    }
+  }
+}

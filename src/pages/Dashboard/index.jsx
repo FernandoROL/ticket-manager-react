@@ -6,7 +6,7 @@ import Title from '../../components/Title'
 import { FiPlus, FiMessageSquare, FiSearch, FiEdit2 } from 'react-icons/fi'
 
 import { Link } from 'react-router-dom'
-import { collection, getDocs, orderBy, limit, startAfter, query } from 'firebase/firestore'
+import { collection, getDocs, orderBy, limit, startAfter, query, where } from 'firebase/firestore'
 
 import { format } from 'date-fns'
 
@@ -16,78 +16,70 @@ import Modal from '../../components/Modal'
 
 const listRef = collection(db, "tickets")
 
+async function fetchPage(uid, cursor) {
+    const constraints = [where('userId', '==', uid), orderBy('created_at', 'desc')]
+    if (cursor) constraints.push(startAfter(cursor))
+    const snapshot = await getDocs(query(listRef, ...constraints, limit(5)))
+    const tickets = snapshot.docs.map(document => {
+        const data = document.data()
+        return {
+            ...data,
+            id: document.id,
+            customer: data.client,
+            createdFormat: format(data.created_at.toDate(), 'dd/MM/yyyy')
+        }
+    })
+    return { tickets, last: snapshot.docs.at(-1) }
+}
+
 export default function Dashboard() {
-    const { logout } = useContext(AuthContext);
+    const { user } = useContext(AuthContext);
 
     const [tickets, setTickets] = useState([])
     const [loading, setLoading] = useState(true);
 
-    const [isEmpty, setIsEmpty] = useState(false)
+    const [hasMore, setHasMore] = useState(false)
     const [lastDocs, setLastDocs] = useState()
     const [loadingMore, setLoadingMore] = useState(false)
 
     const [showPostModal, setShowPostModal] = useState(false)
     const [detail, setDetail] = useState({})
 
+    const [loadError, setLoadError] = useState('')
+
     useEffect(() => {
+        let active = true
         async function loadTickets() {
-            const q = query(listRef, orderBy('created_at', 'desc'), limit(5));
-
-            const querySnapshot = await getDocs(q)
-            setTickets([]);
-
-            await updateState(querySnapshot)
-
-            setLoading(false);
-
+            try {
+                const page = await fetchPage(user.uid)
+                if (active) {
+                    setTickets(page.tickets)
+                    setLastDocs(page.last)
+                    setHasMore(page.tickets.length === 5)
+                }
+            } catch (error) {
+                if (active) setLoadError('Could not load tickets (' + error.code + ').')
+            } finally {
+                if (active) setLoading(false)
+            }
         }
+        loadTickets()
+        return () => { active = false }
+    }, [user.uid])
 
-        loadTickets();
-
-
-        return () => { }
-    }, [])
-
-
-    async function updateState(querySnapshot) {
-        const isCollectionEmpty = querySnapshot.size === 0;
-
-        if (!isCollectionEmpty) {
-            let lista = [];
-
-            querySnapshot.forEach((doc) => {
-                lista.push({
-                    id: doc.id,
-                    subject: doc.data().subject,
-                    customer: doc.data().client,
-                    clientId: doc.data().clientId,
-                    created_at: doc.data().created_at,
-                    createdFormat: format(doc.data().created_at.toDate(), 'dd/MM/yyyy'),
-                    status: doc.data().status,
-                    description: doc.data().description,
-                })
-            })
-
-            setTickets(tickets => [...tickets, ...lista])
-
-            const lastDoc = querySnapshot.docs[querySnapshot.docs.length - 1]
-            setLastDocs(lastDoc)
-
-        } else {
-            setIsEmpty(true);
-        }
-
-        setLoadingMore(false)
-
-    }
-
-    async function handleMore(){
+    async function handleMore() {
         setLoadingMore(true)
-
-        const q = query(listRef, orderBy('created_at', 'desc'), startAfter(lastDocs), limit(5))
-
-        const querySnapshot = await getDocs(q)
-        await updateState(querySnapshot)
+        setLoadError('')
+        try {
+            const page = await fetchPage(user.uid, lastDocs)
+            setTickets(current => [...current, ...page.tickets])
+            setLastDocs(page.last)
+            setHasMore(page.tickets.length === 5)
+        } catch (error) {
+            setLoadError('Could not load more tickets (' + error.code + ').')
+        } finally {
+            setLoadingMore(false)
+        }
     }
 
     function toggleModal(item) {
@@ -124,9 +116,10 @@ export default function Dashboard() {
                 </Title>
 
                 <>
+                    {loadError && <p role="alert">{loadError}</p>}
                     {tickets.length === 0 ? (
                         <div className="container dashboard">
-                            <span>Nenhum ticket encontrado...</span>
+                            {!loadError && <span>Nenhum ticket encontrado...</span>}
                             <Link to="/new" className="new">
                                 <FiPlus color="#FFF" size={25} />
                                 Novo ticket
@@ -150,9 +143,9 @@ export default function Dashboard() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {tickets.map((item, index) => {
+                                    {tickets.map(item => {
                                         return (
-                                            <tr key={index}>
+                                            <tr key={item.id}>
                                                 <td data-label="Customer">{item.customer}</td>
                                                 <td data-label="Subject">{item.subject}</td>
                                                 <td data-label="Status">
@@ -176,7 +169,7 @@ export default function Dashboard() {
                             </table>
 
                             {loadingMore && <h3>Loading more tickets...</h3>}
-                            {!loadingMore && !isEmpty && <button className='btn-more' onClick={handleMore}>Load more...</button>}
+                            {!loadingMore && hasMore && <button className='btn-more' onClick={handleMore}>Load more...</button>}
                         </>
                     )}
                 </>

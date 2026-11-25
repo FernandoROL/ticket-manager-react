@@ -1,7 +1,7 @@
 import './signup.css';
 import logo from '../../assets/logo.svg';
 import { useState, useContext } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 
 import { AuthContext } from '../../contexts/auth';
 
@@ -11,7 +11,7 @@ export default function SignUp() {
     const [password, setPassword] = useState('');
     const [username, setUsername] = useState('');
 
-    const { signUp, loadingAuth } = useContext(AuthContext);
+    const { signUp, loadingAuth, signed, loading } = useContext(AuthContext);
 
     async function handleSubmit(event) {
         event.preventDefault();
@@ -22,6 +22,8 @@ export default function SignUp() {
             alert("Please fill in all fields!");
         }
     }
+
+    if (!loading && signed && !loadingAuth) return <Navigate to="/dashboard" replace />;
 
     return (
         <div>
@@ -55,7 +57,7 @@ export default function SignUp() {
                             onChange={(e) => setPassword(e.target.value)}
                         />
 
-                        <button type="submit">
+                        <button type="submit" disabled={loadingAuth || loading}>
                             {loadingAuth ? 'Loading...' : 'Register'}
                         </button>
                     </form>

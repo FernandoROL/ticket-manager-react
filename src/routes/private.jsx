@@ -1,9 +1,9 @@
-import { useContext } from "react";
+import { Fragment, useContext } from "react";
 import { Navigate } from "react-router-dom";
 import { AuthContext } from "../contexts/auth";
 
 export default function Private({ children }) {
-    const { signed, loading } = useContext(AuthContext)
+    const { signed, loading, user } = useContext(AuthContext)
 
     if(loading) {
         return (
@@ -15,5 +15,5 @@ export default function Private({ children }) {
         return <Navigate to="/" />
     }
 
-    return children
+    return <Fragment key={user.uid}>{children}</Fragment>
 }

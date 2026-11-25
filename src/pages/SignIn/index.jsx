@@ -1,7 +1,7 @@
 import './signin.css';
 import logo from '../../assets/logo.svg';
 import { useState, useContext } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 
 import { AuthContext } from '../../contexts/auth';
 
@@ -10,7 +10,7 @@ export default function SignIn() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
 
-    const { signIn, loadingAuth } = useContext(AuthContext);
+    const { signIn, loadingAuth, signed, loading } = useContext(AuthContext);
 
     function handleSubmit(event) {
         event.preventDefault();
@@ -21,6 +21,8 @@ export default function SignIn() {
             alert("Please fill in all fields!");
         }
     }
+
+    if (!loading && signed && !loadingAuth) return <Navigate to="/dashboard" replace />;
 
     return (
         <div>
@@ -46,14 +48,14 @@ export default function SignIn() {
                             onChange={(e) => setPassword(e.target.value)}
                         />
 
-                        <button type="submit">
+                        <button type="submit" disabled={loadingAuth || loading}>
                             {loadingAuth ? "Loading..." : `Login`}
                         </button>
                     </form>
 
                     <div className="links-bottom">
                         <Link to="/">Forgot password?</Link>
-                        <Link to="/register">Don't have an account? Sign-up</Link>
+                        <Link to="/register">Don&apos;t have an account? Sign-up</Link>
                     </div>
 
                 </div>

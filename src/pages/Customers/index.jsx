@@ -1,13 +1,15 @@
 import { FiUsers } from "react-icons/fi";
 import Header from "../../components/Header";
 import Title from "../../components/Title";
-import { useState } from "react";
+import { AuthContext } from "../../contexts/auth";
+import { useContext, useState } from "react";
 import { addDoc, collection } from "firebase/firestore";
 import { db } from "../../services/firebase";
 import { toast } from "react-toastify";
 
 export default function Customers() {
 
+    const { user } = useContext(AuthContext)
     const [name, setName] = useState('')
     const [cnpj, setCnpj] = useState('')
     const [address, setAddress] = useState('')
@@ -17,6 +19,7 @@ export default function Customers() {
 
         if (name !== '' && cnpj !== '' && address) {
             await addDoc(collection(db, "customers"), {
+                userId: user.uid,
                 companyName: name,
                 cnpj,
                 address

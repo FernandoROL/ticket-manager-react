@@ -14,7 +14,9 @@ export default function Header() {
     return (
         <div className="sidebar">
             <div>
-                <img src={user.avatarUrl === null ? avatarImage : user.avatarUrl} alt="User profile picture" />
+                <img src={user.avatarUrl || avatarImage} onError={event => {
+                    if (event.currentTarget.getAttribute('src') !== avatarImage) event.currentTarget.src = avatarImage
+                }} alt="User profile picture" />
             </div>
             <Link to="/dashboard">
                 <FiHome color="#FFF" size={24} />
